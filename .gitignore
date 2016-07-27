@@ -1,0 +1,4 @@
+*.sln
+*.CSharp.*
+Library
+Temp
