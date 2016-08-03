@@ -24,6 +24,7 @@ namespace Assets.Game
         public uint width = 1000;
         public uint height = 1000;
         public uint minSize = 10;
+        public uint wallWidth = 1;
         public GameObject roomProto = null;
 
         int random(int min, int max)
@@ -56,9 +57,9 @@ namespace Assets.Game
                     }
                     newNode = new QuadNode
                     {
-                        x = node.x + size,
+                        x = node.x + size + wallWidth,
                         y = node.y,
-                        w = node.w - size,
+                        w = node.w - size - wallWidth,
                         h = node.h
                     };
                     node.w = size;
@@ -123,9 +124,9 @@ namespace Assets.Game
                     newNode = new QuadNode
                     {
                         x = node.x,
-                        y = node.y + size,
+                        y = node.y + size + wallWidth,
                         w = node.w,
-                        h = node.h - size
+                        h = node.h - size - wallWidth
                     };
                     node.h = size;
 
