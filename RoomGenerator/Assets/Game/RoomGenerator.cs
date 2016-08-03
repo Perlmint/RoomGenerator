@@ -1,6 +1,10 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.UI;
+#if UNITY_EDITOR
+using System.IO;
+using UnityEditor;
+#endif
 
 namespace Assets.Game
 {
@@ -192,12 +196,21 @@ namespace Assets.Game
             return newNode;
         }
 
-        // Use this for initialization
-        void Start()
+        public QuadNode centerNode;
+
+        public void generate()
         {
+            GetComponent<RectTransform>().sizeDelta = new Vector2(width, height);
+            Camera.main.orthographicSize = Mathf.Min(width / 4, height / 4);
+            Camera.main.transform.position = new Vector3(width / 4, height / 4, -10);
+            // remove all children
+            var children = new List<GameObject>();
+            foreach (Transform child in transform) children.Add(child.gameObject);
+            children.ForEach(child => Destroy(child));
+
             // 일단 좌우상하 대칭을 생각하고 1/4 조각으로 쪼갬
             // 나중에 이걸 기준으로 대칭 생성하면 될거임
-            QuadNode centerNode = new QuadNode
+            centerNode = new QuadNode
             {
                 w = width / 2,
                 h = height / 2,
@@ -206,7 +219,7 @@ namespace Assets.Game
             };
             Queue<QuadNode> queue = new Queue<QuadNode>();
             queue.Enqueue(centerNode);
-            while(queue.Count > 0)
+            while (queue.Count > 0)
             {
                 // 쪼갠다!
                 QuadNode node = queue.Dequeue();
@@ -233,7 +246,7 @@ namespace Assets.Game
                 }
 
                 node.room = Instantiate(roomProto);
-                node.room.transform.parent = transform;
+                node.room.transform.SetParent(transform);
                 var rt = node.room.GetComponent<RectTransform>();
                 rt.localPosition = new Vector3(node.x, node.y);
                 rt.sizeDelta = new Vector2(node.w, node.h);
@@ -258,6 +271,96 @@ namespace Assets.Game
                 }
             }
         }
+
+        // Use this for initialization
+        void Start()
+        {
+            generate();
+        }
+
+#if UNITY_EDITOR
+        [UnityEditor.CustomEditor(typeof(RoomGenerator))]
+        public class Exporter : UnityEditor.Editor
+        {
+            public override void OnInspectorGUI()
+            {
+                base.OnInspectorGUI();
+
+                var script = (RoomGenerator)target;
+                if (GUILayout.Button("ReGenerate"))
+                {
+                    script.generate();
+                }
+                if (GUILayout.Button("Export"))
+                {
+                    var outPath = EditorUtility.SaveFilePanel("export target", "", "export", "txt");
+
+                    // init
+                    bool[][] map_array = new bool[script.height][];
+                    for (int i = 0; i < script.height; i++)
+                    {
+                        map_array[i] = new bool[script.width];
+                        for (int j = 0; j < script.width; j++)
+                        {
+                            map_array[i][j] = true;
+                        }
+                    }
+
+                    HashSet<QuadNode> exportedNodes = new HashSet<QuadNode>();
+                    Queue<QuadNode> bfsQueue = new Queue<QuadNode>();
+                    bfsQueue.Enqueue(script.centerNode);
+                    while(bfsQueue.Count > 0)
+                    {
+                        var node = bfsQueue.Dequeue();
+                        fill(map_array, script.width / 2 + node.x, script.height / 2 + node.y, node.w, node.h);
+                        fill(map_array, script.width / 2 - node.x - node.w, script.height / 2 + node.y, node.w, node.h);
+                        fill(map_array, script.width / 2 - node.x - node.w, script.height / 2 - node.y - node.h, node.w, node.h);
+                        fill(map_array, script.width / 2 + node.x, script.height / 2 - node.y - node.h, node.w, node.h);
+                        addToQueue(exportedNodes, bfsQueue, node.l);
+                        addToQueue(exportedNodes, bfsQueue, node.r);
+                        addToQueue(exportedNodes, bfsQueue, node.f);
+                        addToQueue(exportedNodes, bfsQueue, node.b);
+                    }
+
+                    using (var file = File.OpenWrite(outPath))
+                    {
+                        for (int i = 0; i < script.height; i++)
+                        {
+                            for (int j = 0; j < script.width; j++)
+                            {
+                                file.WriteByte((byte)(map_array[i][j] ? '1' : '0'));
+                            }
+                            file.WriteByte((byte)'\r');
+                            file.WriteByte((byte)'\n');
+                        }
+                    }
+                }
+            }
+
+            void addToQueue(HashSet<QuadNode> exported, Queue<QuadNode> queue, List<QuadNode> nodes)
+            {
+                foreach(var node in nodes)
+                {
+                    if (!exported.Contains(node))
+                    {
+                        queue.Enqueue(node);
+                        exported.Add(node);
+                    }
+                }
+            }
+
+            void fill(bool[][] map, uint x, uint y, uint width, uint height)
+            {
+                for(int i = 0; i < width; i++)
+                {
+                    for (int j = 0; j < height; j++)
+                    {
+                        map[y + j][x + i] = false;
+                    }
+                }
+            }
+        }
+#endif
 
 
         // Update is called once per frame
